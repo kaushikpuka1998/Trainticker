@@ -17,6 +17,6 @@ public class Station {
 
     @Column(unique = true, nullable = false)
     private String code;
-
     private String name;
+    private String state;
 }

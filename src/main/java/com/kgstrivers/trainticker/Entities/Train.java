@@ -1,12 +1,13 @@
 package com.kgstrivers.trainticker.Entities;
 
 
+import com.fasterxml.jackson.annotation.JsonManagedReference;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import lombok.RequiredArgsConstructor;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @Entity
@@ -16,13 +17,46 @@ import java.util.List;
 @Data
 public class Train {
     @Id
-    @GeneratedValue(strategy = jakarta.persistence.GenerationType.IDENTITY)
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
     private String trainNumber;
+
     private String trainName;
 
+    @OneToMany(mappedBy = "train",
+            cascade = CascadeType.ALL,
+            orphanRemoval = true)
+    @JsonManagedReference
+    private List<RouteStation> routeStations = new ArrayList<>();
+
+    @OneToMany(mappedBy = "train",
+            cascade = CascadeType.ALL,
+            orphanRemoval = true)
+    @JsonManagedReference
+    private List<Coach> coaches = new ArrayList<>();
+
     @OneToMany(mappedBy = "train", cascade = CascadeType.ALL)
-    private List<RouteStation> routeStations;
-    @OneToMany(mappedBy = "train", cascade = CascadeType.ALL)
-    private List<Coach> coaches;
+    @JsonManagedReference
+    private List<TrainSchedule> schedules;
+
+
+    @PrePersist
+    @PreUpdate
+    public void setRelations() {
+
+        if (coaches != null) {
+            coaches.forEach(coach -> coach.setTrain(this));
+        }
+
+        if (routeStations != null) {
+            routeStations.forEach(route -> route.setTrain(this));
+        }
+
+        if (schedules != null) {
+            schedules.forEach(
+                    schedule -> schedule.setTrain(this)
+            );
+        }
+    }
 }

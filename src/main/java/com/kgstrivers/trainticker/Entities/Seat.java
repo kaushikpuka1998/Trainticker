@@ -1,5 +1,6 @@
 package com.kgstrivers.trainticker.Entities;
 
+import com.fasterxml.jackson.annotation.JsonBackReference;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -19,6 +20,7 @@ public class Seat {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "coach_id")
+    @JsonBackReference
     private Coach coach;
 
     private long occupiedMask;
