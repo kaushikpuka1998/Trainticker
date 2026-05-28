@@ -1,41 +1,92 @@
 # 🚆 TrainTicker - IRCTC Like Train Booking System
 
-TrainTicker is a scalable backend system inspired by IRCTC, built using Java, Spring Boot, PostgreSQL, and JPA/Hibernate.
-The system supports train management, route management, coach & seat generation, train schedules, and seat availability search.
+TrainTicker is a scalable backend railway reservation system inspired by IRCTC, built using Java, Spring Boot, PostgreSQL, and JPA/Hibernate.
+
+The project supports:
+
+* Train Management
+* Route Management
+* Coach & Seat Generation
+* Train Scheduling
+* Passenger Booking
+* Dynamic Seat Allocation
+* Availability Search
 
 ---
 
 # ✨ Features
 
-## 🚉 Train Management
+# 🚉 Train Management
 
 * Create trains with:
 
   * Train Number
   * Train Name
+  * Running Schedules
   * Route Stations
   * Coaches
-  * Running Schedule
 
-## 🛤 Route Management
+---
 
-* Add multiple stations for a train
-* Store:
+# 🛤 Route Management
 
-  * Arrival Time
-  * Departure Time
-  * Distance From Source
-  * Day Number
-  * Station Order
+Supports:
 
-## 🏙 Station Reusability
+* Multi-day journeys
+* Station ordering
+* Distance tracking
+* Arrival/Departure timings
 
-* Stations are normalized and reused across trains
-* Avoid duplicate station creation using station code lookup
+Each route station stores:
 
-## 🚆 Coach Management
+* Station Code
+* Station Name
+* State
+* Day Number
+* Distance From Source
+* Station Order
 
-Supports multiple coach types:
+---
+
+# 🏙 Station Reusability
+
+Stations are normalized and reused across trains.
+
+Example:
+
+```text id="g2j98x"
+HWH
+NDLS
+CSMT
+```
+
+exist only once in database and multiple trains reference them.
+
+---
+
+# 📅 Train Scheduling
+
+Supports:
+
+* Daily trains
+* Weekday trains
+* Weekend trains
+* Custom schedules
+
+Example:
+
+```text id="7l8r5u"
+1111111 -> Daily
+1111100 -> Monday-Friday
+0000011 -> Weekend
+1010100 -> Monday, Wednesday, Friday
+```
+
+---
+
+# 🚆 Coach Management
+
+Supported coach types:
 
 * 1A
 * 2A
@@ -43,9 +94,11 @@ Supports multiple coach types:
 * SL
 * Pantry
 
-## 💺 Automatic Seat Generation
+---
 
-Seats are auto-generated based on coach type.
+# 💺 Automatic Seat Generation
+
+Seats are automatically generated based on coach type.
 
 Example:
 
@@ -56,33 +109,95 @@ Example:
 | 3A         | 72         |
 | SL         | 80         |
 
-## 📅 Train Scheduling
+---
+
+# 🎟 Booking System
 
 Supports:
 
-* Daily trains
-* Weekday trains
-* Weekend trains
-* Custom running days
+* Multi-passenger booking
+* PNR generation
+* Seat allocation
+* Passenger mapping
+* Journey segment handling
 
-Example:
+---
 
-```text
-1111111 -> Daily
-1111100 -> Monday-Friday
-0000011 -> Weekend
-1010100 -> Monday, Wednesday, Friday
+# 👤 Passenger Management
+
+Each booking can contain multiple passengers.
+
+Passenger details:
+
+* Name
+* Age
+* Gender
+
+Each passenger gets:
+
+* Individual seat
+* Individual booking status
+
+---
+
+# 🪑 Seat Allocation System
+
+Seat allocation is based on:
+
+* Journey date
+* Class type
+* Existing bookings
+* Seat availability
+
+Supported statuses:
+
+* CONFIRMED
+* RAC (Planned)
+* WAITING (Planned)
+
+---
+
+# 🧠 Journey Segment Masking
+
+TrainTicker uses segment-based booking logic similar to real railway systems.
+
+Example route:
+
+```text id="hdh6v5"
+HWH -> ASN -> GAYA -> NDLS
 ```
 
-## 🔍 Availability Search (Planned)
+If seat booked:
 
-API design supports:
+```text id="jlwm20"
+HWH -> GAYA
+```
 
-* Source Station
-* Destination Station
-* Journey Date
-* Class Type
-* Dynamic Seat Availability
+Same seat can still be allocated:
+
+```text id="jlwm21"
+GAYA -> NDLS
+```
+
+This improves seat utilization significantly.
+
+---
+
+# 🔍 Availability Search (Planned)
+
+API Design:
+
+```http id="jlwm22"
+GET /api/v1/availability
+```
+
+Supports:
+
+* Source station
+* Destination station
+* Journey date
+* Class type
+* Dynamic seat availability
 
 ---
 
@@ -102,14 +217,15 @@ API design supports:
 
 # 📂 Project Structure
 
-```text
+```text id="jlwm23"
 src/main/java/com/kgstrivers/trainticker
 │
 ├── Controllers
 ├── Services
 ├── Repositories
 ├── Entities
-├── DTOs
+├── DAO
+├── DTO
 ├── Config
 └── Exceptions
 ```
@@ -118,33 +234,45 @@ src/main/java/com/kgstrivers/trainticker
 
 # 🧩 Entity Relationships
 
-## Train
+# Train
 
 * One Train → Many RouteStations
 * One Train → Many Coaches
 * One Train → Many Schedules
+* One Train → Many Bookings
 
-## Coach
+# Coach
 
 * One Coach → Many Seats
 
-## RouteStation
+# Booking
+
+* One Booking → Many Passengers
+* One Booking → Many BookedSeats
+
+# Passenger
+
+* One Passenger → One Allocated Seat
+
+# RouteStation
 
 * Many RouteStations → One Station
 
 ---
 
-# 🗃 Database Design
+# 🗃 Database Tables
 
-## Core Tables
+Core Tables:
 
 * trains
 * stations
 * route_stations
+* train_schedules
 * coaches
 * seats
-* train_schedules
 * bookings
+* passengers
+* booked_seats
 
 ---
 
@@ -154,7 +282,7 @@ src/main/java/com/kgstrivers/trainticker
 
 ### Request Body
 
-```json
+```json id="jlwm24"
 {
   "trainNumber": "12301",
   "trainName": "Howrah New Delhi Rajdhani Express",
@@ -206,29 +334,103 @@ src/main/java/com/kgstrivers/trainticker
 
 ---
 
+# 🎟 Sample Booking API
+
+## POST `/api/v1/bookings`
+
+### Request Body
+
+```json id="jlwm25"
+{
+  "trainNumber": "12301",
+  "journeyDate": "2026-06-15",
+
+  "sourceStationCode": "HWH",
+  "destinationStationCode": "NDLS",
+
+  "classType": "3A",
+
+  "passengers": [
+    {
+      "name": "Kaushik Ghosh",
+      "age": 26,
+      "gender": "MALE"
+    },
+    {
+      "name": "Rahul Sharma",
+      "age": 30,
+      "gender": "MALE"
+    }
+  ]
+}
+```
+
+---
+
+# 📤 Sample Booking Response
+
+```json id="jlwm26"
+{
+  "pnr": "8745632198",
+  "trainNumber": "12301",
+  "trainName": "Howrah New Delhi Rajdhani Express",
+  "journeyDate": "2026-06-15",
+  "source": "HWH",
+  "destination": "NDLS",
+  "bookingStatus": "CONFIRMED",
+
+  "passengers": [
+    {
+      "passengerName": "Kaushik Ghosh",
+      "coachNumber": "B1",
+      "seatNumber": "12",
+      "bookingStatus": "CONFIRMED"
+    },
+    {
+      "passengerName": "Rahul Sharma",
+      "coachNumber": "B1",
+      "seatNumber": "13",
+      "bookingStatus": "CONFIRMED"
+    }
+  ]
+}
+```
+
+---
+
 # ⚙️ How To Run
 
-## Clone Repository
+# Clone Repository
 
-```bash
+```bash id="jlwm27"
 git clone <your-github-url>
 ```
 
-## Configure PostgreSQL
+---
 
-Update `application.properties`
+# Configure PostgreSQL
 
-```properties
+Update:
+
+```properties id="jlwm28"
+application.properties
+```
+
+```properties id="jlwm29"
 spring.datasource.url=jdbc:postgresql://localhost:5432/trainticker
+
 spring.datasource.username=postgres
+
 spring.datasource.password=your_password
 
 spring.jpa.hibernate.ddl-auto=update
 ```
 
-## Run Application
+---
 
-```bash
+# Run Application
+
+```bash id="jlwm30"
 mvn spring-boot:run
 ```
 
@@ -236,32 +438,36 @@ mvn spring-boot:run
 
 # 📌 Upcoming Features
 
-* Ticket Booking API
-* Waiting List
 * RAC
-* Dynamic Seat Allocation
-* Fare Calculation
+* Waiting List
 * Tatkal Booking
+* Dynamic Pricing
+* Seat Preference
+* Lower/Middle/Upper Berth
+* Fare Calculation
 * User Authentication
-* Payment Integration
-* Kafka Based Booking Queue
-* Redis Caching
+* JWT Security
+* Redis Seat Locking
+* Kafka Booking Queue
 * Distributed Locking
-* Real-time Seat Availability
+* Cancellation & Refund
+* Email/SMS Notification
+* Payment Integration
 
 ---
 
 # 🧠 Design Concepts Used
 
+* Database Normalization
 * Entity Relationships
 * JPA Cascade Operations
 * Bidirectional Mapping
-* DTO Design
-* Database Normalization
-* Automatic Seat Generation
+* Dynamic Seat Allocation
+* Segment-Based Reservation
 * Schedule Management
 * Route Ordering
-* Train Availability Logic
+* Availability Algorithms
+* Production-style Architecture
 
 ---
 
@@ -270,10 +476,11 @@ mvn spring-boot:run
 This project demonstrates:
 
 * Scalable backend architecture
-* Real-world railway domain modeling
+* Real-world railway reservation modeling
 * Spring Boot best practices
-* Complex JPA relationship handling
+* Advanced JPA relationship handling
 * Production-grade API design
+* Complex booking workflows
 
 ---
 
