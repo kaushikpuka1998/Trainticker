@@ -20,8 +20,9 @@ public class TrainService {
     @Autowired
     StationRepository stationRepository;
 
-    public TrainService(TrainRepository trainRepository) {
+    public TrainService(TrainRepository trainRepository, StationRepository stationRepository) {
         this.trainRepository = trainRepository;
+        this.stationRepository = stationRepository;
     }
 
 
@@ -32,6 +33,10 @@ public class TrainService {
     public Train addTrain(Train train) {
         Train updatedTrain = findDuplicateStation(train);
         return trainRepository.save(updatedTrain);
+    }
+
+    public Train getTrain(String trainNumber){
+        return trainRepository.findByTrainNumber(trainNumber).orElse(null);
     }
 
     private Train findDuplicateStation(Train train) {

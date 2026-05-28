@@ -22,6 +22,11 @@ public class TrainController {
         return ResponseEntity.ok(trainService.getAllTrain());
     }
 
+    @GetMapping("/trains/{trainNumber}")
+    public ResponseEntity<Train> getTrainDetails(@PathVariable String trainNumber){
+        return ResponseEntity.ok(trainService.getTrain(trainNumber));
+    }
+
     @PostMapping("/trains")
     public ResponseEntity<Train> addTrain(@RequestBody Train train) {
         return ResponseEntity.ok(trainService.addTrain(train));

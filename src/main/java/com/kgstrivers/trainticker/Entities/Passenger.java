@@ -20,4 +20,8 @@ public class Passenger {
     private Integer age;
     @Enumerated(EnumType.STRING)
     private Gender gender;
+
+    @ManyToOne
+    @JoinColumn(name = "booking_id")
+    private Booking booking;
 }
