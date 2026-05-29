@@ -1,16 +1,19 @@
-# 🚆 TrainTicker - IRCTC Like Train Booking System
+# 🚆 TrainTicker - IRCTC Like Railway Reservation System
 
 TrainTicker is a scalable backend railway reservation system inspired by IRCTC, built using Java, Spring Boot, PostgreSQL, and JPA/Hibernate.
 
-The project supports:
+The system supports:
 
 * Train Management
 * Route Management
 * Coach & Seat Generation
 * Train Scheduling
-* Passenger Booking
+* Ticket Booking
+* Passenger Management
+* RAC & Waiting List
 * Dynamic Seat Allocation
 * Availability Search
+* Fare Configuration
 
 ---
 
@@ -18,33 +21,31 @@ The project supports:
 
 # 🚉 Train Management
 
-* Create trains with:
+Supports:
 
-  * Train Number
-  * Train Name
-  * Running Schedules
-  * Route Stations
-  * Coaches
+* Train creation
+* Route mapping
+* Coach attachment
+* Train schedules
+* Running day configuration
 
 ---
 
 # 🛤 Route Management
 
-Supports:
+Each train supports:
 
 * Multi-day journeys
 * Station ordering
-* Distance tracking
-* Arrival/Departure timings
+* Arrival/departure timings
+* Distance calculation
+* State mapping
 
-Each route station stores:
+Example:
 
-* Station Code
-* Station Name
-* State
-* Day Number
-* Distance From Source
-* Station Order
+```text
+HWH -> ASN -> GAYA -> NDLS
+```
 
 ---
 
@@ -54,13 +55,11 @@ Stations are normalized and reused across trains.
 
 Example:
 
-```text id="g2j98x"
-HWH
-NDLS
-CSMT
-```
+* HWH
+* NDLS
+* CSMT
 
-exist only once in database and multiple trains reference them.
+exist only once in database.
 
 ---
 
@@ -75,7 +74,7 @@ Supports:
 
 Example:
 
-```text id="7l8r5u"
+```text
 1111111 -> Daily
 1111100 -> Monday-Friday
 0000011 -> Weekend
@@ -92,22 +91,22 @@ Supported coach types:
 * 2A
 * 3A
 * SL
+* 2S
 * Pantry
 
 ---
 
 # 💺 Automatic Seat Generation
 
-Seats are automatically generated based on coach type.
+Seats are auto-generated based on coach type.
 
-Example:
-
-| Coach Type | Seat Count |
-| ---------- | ---------- |
-| 1A         | 24         |
-| 2A         | 54         |
-| 3A         | 72         |
-| SL         | 80         |
+| Coach Type | Confirmed Capacity |
+| ---------- | ------------------ |
+| 1A         | 24                 |
+| 2A         | 54                 |
+| 3A         | 72                 |
+| SL         | 80                 |
+| 2S         | 108                |
 
 ---
 
@@ -117,9 +116,10 @@ Supports:
 
 * Multi-passenger booking
 * PNR generation
+* Journey-based booking
 * Seat allocation
 * Passenger mapping
-* Journey segment handling
+* Segment-based booking
 
 ---
 
@@ -136,68 +136,93 @@ Passenger details:
 Each passenger gets:
 
 * Individual seat
-* Individual booking status
+* RAC/WL number
+* Booking status
 
 ---
 
-# 🪑 Seat Allocation System
-
-Seat allocation is based on:
-
-* Journey date
-* Class type
-* Existing bookings
-* Seat availability
+# 🪑 Seat Allocation
 
 Supported statuses:
 
 * CONFIRMED
-* RAC (Planned)
-* WAITING (Planned)
+* RAC
+* WAITING
+* CANCELLED
 
 ---
 
-# 🧠 Journey Segment Masking
+# 🚦 RAC (Reservation Against Cancellation)
 
-TrainTicker uses segment-based booking logic similar to real railway systems.
+When confirmed seats are full:
 
-Example route:
+* passengers move to RAC
+* RAC passengers receive RAC number
+* cancellation promotes RAC → CONFIRMED
 
-```text id="hdh6v5"
+Example:
+
+```text
+RAC-1
+RAC-2
+```
+
+---
+
+# ⏳ Waiting List
+
+When:
+
+* confirmed seats full
+* RAC full
+
+Passengers move to waiting list.
+
+Example:
+
+```text
+WL-1
+WL-2
+WL-3
+```
+
+---
+
+# 🧠 Segment-Based Reservation
+
+TrainTicker supports journey segment allocation similar to real railway systems.
+
+Example:
+
+```text
 HWH -> ASN -> GAYA -> NDLS
 ```
 
-If seat booked:
+Passenger A:
 
-```text id="jlwm20"
+```text
 HWH -> GAYA
 ```
 
-Same seat can still be allocated:
+Passenger B:
 
-```text id="jlwm21"
+```text
 GAYA -> NDLS
 ```
 
-This improves seat utilization significantly.
+Same seat can be reused without overlap.
 
 ---
 
-# 🔍 Availability Search (Planned)
-
-API Design:
-
-```http id="jlwm22"
-GET /api/v1/availability
-```
+# 💰 Fare Configuration
 
 Supports:
 
-* Source station
-* Destination station
-* Journey date
-* Class type
-* Dynamic seat availability
+* Fare per KM
+* RAC capacity
+* Waiting limit
+* Tatkal quota
+* Dynamic pricing support
 
 ---
 
@@ -217,7 +242,7 @@ Supports:
 
 # 📂 Project Structure
 
-```text id="jlwm23"
+```text
 src/main/java/com/kgstrivers/trainticker
 │
 ├── Controllers
@@ -273,74 +298,69 @@ Core Tables:
 * bookings
 * passengers
 * booked_seats
+* coach_type_config
 
 ---
 
-# 🚀 Sample Train Creation API
+# 🚀 APIs
 
-## POST `/api/v1/trains`
+# 🚆 Train APIs
 
-### Request Body
+## Create Train
 
-```json id="jlwm24"
-{
-  "trainNumber": "12301",
-  "trainName": "Howrah New Delhi Rajdhani Express",
+```http
+POST /api/v1/trains
+```
 
-  "schedules": [
-    {
-      "startDate": "2026-01-01",
-      "endDate": "2026-12-31",
-      "runningDays": "1111111",
-      "active": true
-    }
-  ],
+## Get Train
 
-  "routeStations": [
-    {
-      "code": "HWH",
-      "name": "Howrah Junction",
-      "state": "West Bengal",
-      "stationOrder": 1,
-      "arrivalTime": null,
-      "distanceFromSource": 0,
-      "departureTime": "16:55",
-      "dayNumber": 1
-    },
-    {
-      "code": "NDLS",
-      "name": "New Delhi",
-      "state": "Delhi",
-      "stationOrder": 2,
-      "arrivalTime": "10:00",
-      "distanceFromSource": 1447,
-      "departureTime": null,
-      "dayNumber": 2
-    }
-  ],
-
-  "coaches": [
-    {
-      "coachNumber": "A1",
-      "coachType": "2A"
-    },
-    {
-      "coachNumber": "B1",
-      "coachType": "3A"
-    }
-  ]
-}
+```http
+GET /api/v1/trains/{id}
 ```
 
 ---
 
-# 🎟 Sample Booking API
+# 🎟 Booking APIs
 
-## POST `/api/v1/bookings`
+## Book Ticket
 
-### Request Body
+```http
+POST /api/v1/bookings
+```
 
-```json id="jlwm25"
+## Get Booking By PNR
+
+```http
+GET /api/v1/bookings/{pnr}
+```
+
+---
+
+# ⚙️ Coach Configuration APIs
+
+## Create Coach Configurations
+
+```http
+POST /api/v1/coach-configs
+```
+
+## Get All Configurations
+
+```http
+GET /api/v1/coach-configs
+```
+
+## Get Single Configuration
+
+```http
+GET /api/v1/coach-configs/{coachType}
+```
+
+---
+
+# 📥 Sample Booking Request
+
+```json
 {
   "trainNumber": "12301",
   "journeyDate": "2026-06-15",
@@ -367,30 +387,64 @@ Core Tables:
 
 ---
 
-# 📤 Sample Booking Response
+# 📤 Sample Response
 
-```json id="jlwm26"
+## CONFIRMED
+
+```json
 {
   "pnr": "8745632198",
-  "trainNumber": "12301",
-  "trainName": "Howrah New Delhi Rajdhani Express",
-  "journeyDate": "2026-06-15",
-  "source": "HWH",
-  "destination": "NDLS",
+
   "bookingStatus": "CONFIRMED",
 
   "passengers": [
     {
       "passengerName": "Kaushik Ghosh",
       "coachNumber": "B1",
-      "seatNumber": "12",
+      "seatNumber": "21",
       "bookingStatus": "CONFIRMED"
-    },
+    }
+  ]
+}
+```
+
+---
+
+## RAC
+
+```json
+{
+  "pnr": "8745632198",
+
+  "bookingStatus": "RAC",
+
+  "passengers": [
     {
-      "passengerName": "Rahul Sharma",
-      "coachNumber": "B1",
-      "seatNumber": "13",
-      "bookingStatus": "CONFIRMED"
+      "passengerName": "Kaushik Ghosh",
+      "coachNumber": null,
+      "seatNumber": "RAC-4",
+      "bookingStatus": "RAC"
+    }
+  ]
+}
+```
+
+---
+
+## WAITING
+
+```json
+{
+  "pnr": "8745632198",
+
+  "bookingStatus": "WAITING",
+
+  "passengers": [
+    {
+      "passengerName": "Kaushik Ghosh",
+      "coachNumber": null,
+      "seatNumber": "WL-12",
+      "bookingStatus": "WAITING"
     }
   ]
 }
@@ -402,7 +456,7 @@ Core Tables:
 
 # Clone Repository
 
-```bash id="jlwm27"
+```bash
 git clone <your-github-url>
 ```
 
@@ -412,11 +466,11 @@ git clone <your-github-url>
 
 Update:
 
-```properties id="jlwm28"
+```properties
 application.properties
 ```
 
-```properties id="jlwm29"
+```properties
 spring.datasource.url=jdbc:postgresql://localhost:5432/trainticker
 
 spring.datasource.username=postgres
@@ -430,7 +484,7 @@ spring.jpa.hibernate.ddl-auto=update
 
 # Run Application
 
-```bash id="jlwm30"
+```bash
 mvn spring-boot:run
 ```
 
@@ -438,21 +492,18 @@ mvn spring-boot:run
 
 # 📌 Upcoming Features
 
-* RAC
-* Waiting List
 * Tatkal Booking
 * Dynamic Pricing
 * Seat Preference
 * Lower/Middle/Upper Berth
-* Fare Calculation
-* User Authentication
-* JWT Security
 * Redis Seat Locking
 * Kafka Booking Queue
 * Distributed Locking
 * Cancellation & Refund
-* Email/SMS Notification
+* JWT Authentication
+* Email/SMS Notifications
 * Payment Integration
+* AI Based Demand Pricing
 
 ---
 
@@ -464,10 +515,9 @@ mvn spring-boot:run
 * Bidirectional Mapping
 * Dynamic Seat Allocation
 * Segment-Based Reservation
+* RAC/WL Promotion Logic
 * Schedule Management
-* Route Ordering
-* Availability Algorithms
-* Production-style Architecture
+* Production-style API Design
 
 ---
 
@@ -475,12 +525,12 @@ mvn spring-boot:run
 
 This project demonstrates:
 
-* Scalable backend architecture
 * Real-world railway reservation modeling
-* Spring Boot best practices
 * Advanced JPA relationship handling
-* Production-grade API design
-* Complex booking workflows
+* Scalable backend architecture
+* Production-grade booking workflow
+* Complex seat allocation systems
+* RAC & Waiting List handling
 
 ---
 
