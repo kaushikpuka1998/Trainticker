@@ -24,4 +24,7 @@ public class Passenger {
     @ManyToOne
     @JoinColumn(name = "booking_id")
     private Booking booking;
+
+    private Integer racNumber;
+    private Integer waitingNumber;
 }
