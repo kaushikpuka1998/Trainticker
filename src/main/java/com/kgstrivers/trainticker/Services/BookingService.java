@@ -13,6 +13,8 @@ import jakarta.annotation.Nullable;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -214,6 +216,10 @@ public class BookingService {
         return mask;
     }
 
+    @Cacheable(
+            value = "pnrCache",
+            key = "#pnr"
+    )
     public BookingResponse getBookingByPnr(String pnr) {
         return bookingRepository.findByPnr(pnr)
                 .map(booking -> {
@@ -338,6 +344,10 @@ public class BookingService {
                 );
     }
 
+    @CacheEvict(
+            value = "pnrCache",
+            key = "#pnr"
+    )
     @Transactional
     public void cancelTicket(
             String pnr,
