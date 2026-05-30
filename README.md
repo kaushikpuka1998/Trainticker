@@ -19,6 +19,7 @@ The system supports:
 * Fare Configuration
 
 ---
+---
 
 # ✨ Features
 
