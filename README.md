@@ -1,6 +1,6 @@
 # 🚆 TrainTicker - IRCTC Like Railway Reservation System
 
-TrainTicker is a scalable backend railway reservation system inspired by IRCTC, built using Java, Spring Boot, PostgreSQL, and JPA/Hibernate.
+TrainTicker is a scalable backend railway reservation system inspired by IRCTC, built using Java, Spring Boot, PostgreSQL, Redis, and JPA/Hibernate.
 
 The system supports:
 
@@ -12,6 +12,9 @@ The system supports:
 * Passenger Management
 * RAC & Waiting List
 * Dynamic Seat Allocation
+* Partial Cancellation
+* Automatic RAC/WL Promotion
+* Redis-based PNR Caching
 * Availability Search
 * Fare Configuration
 
@@ -19,7 +22,7 @@ The system supports:
 
 # ✨ Features
 
-# 🚉 Train Management
+## 🚉 Train Management
 
 Supports:
 
@@ -31,7 +34,7 @@ Supports:
 
 ---
 
-# 🛤 Route Management
+## 🛤 Route Management
 
 Each train supports:
 
@@ -49,7 +52,7 @@ HWH -> ASN -> GAYA -> NDLS
 
 ---
 
-# 🏙 Station Reusability
+## 🏙 Station Reusability
 
 Stations are normalized and reused across trains.
 
@@ -63,7 +66,7 @@ exist only once in database.
 
 ---
 
-# 📅 Train Scheduling
+## 📅 Train Scheduling
 
 Supports:
 
@@ -83,7 +86,7 @@ Example:
 
 ---
 
-# 🚆 Coach Management
+## 🚆 Coach Management
 
 Supported coach types:
 
@@ -96,21 +99,21 @@ Supported coach types:
 
 ---
 
-# 💺 Automatic Seat Generation
+## 💺 Automatic Seat Generation
 
 Seats are auto-generated based on coach type.
 
-| Coach Type | Confirmed Capacity |
-| ---------- | ------------------ |
-| 1A         | 24                 |
-| 2A         | 54                 |
-| 3A         | 72                 |
-| SL         | 80                 |
-| 2S         | 108                |
+| Coach Type | Confirmed Capacity | RAC Capacity |
+| ---------- | ------------------ | ------------ |
+| 1A         | 24                 | 6            |
+| 2A         | 54                 | 12           |
+| 3A         | 72                 | 18           |
+| SL         | 80                 | 20           |
+| 2S         | 108                | 30           |
 
 ---
 
-# 🎟 Booking System
+## 🎟 Booking System
 
 Supports:
 
@@ -120,10 +123,12 @@ Supports:
 * Seat allocation
 * Passenger mapping
 * Segment-based booking
+* RAC allocation
+* WAITLIST allocation
 
 ---
 
-# 👤 Passenger Management
+## 👤 Passenger Management
 
 Each booking can contain multiple passengers.
 
@@ -141,24 +146,25 @@ Each passenger gets:
 
 ---
 
-# 🪑 Seat Allocation
+## 🪑 Seat Allocation
 
 Supported statuses:
 
 * CONFIRMED
 * RAC
-* WAITING
+* WAITLIST
 * CANCELLED
 
 ---
 
-# 🚦 RAC (Reservation Against Cancellation)
+## 🚦 RAC (Reservation Against Cancellation)
 
 When confirmed seats are full:
 
 * passengers move to RAC
-* RAC passengers receive RAC number
-* cancellation promotes RAC → CONFIRMED
+* RAC passengers receive RAC numbers
+* cancellation automatically promotes RAC → CONFIRMED
+* WAITLIST passengers automatically move to RAC
 
 Example:
 
@@ -167,9 +173,15 @@ RAC-1
 RAC-2
 ```
 
+TrainTicker supports automatic queue reordering after:
+
+* cancellation
+* RAC promotion
+* WAITLIST promotion
+
 ---
 
-# ⏳ Waiting List
+## ⏳ Waiting List
 
 When:
 
@@ -186,9 +198,59 @@ WL-2
 WL-3
 ```
 
+Features:
+
+* automatic WL numbering
+* automatic WL → RAC promotion
+* dynamic waiting list reordering
+
 ---
 
-# 🧠 Segment-Based Reservation
+## ❌ Cancellation System
+
+TrainTicker supports:
+
+* Full Booking Cancellation
+* Partial Passenger Cancellation
+* Automatic RAC Promotion
+* Automatic WAITLIST Promotion
+* Queue Reordering
+
+### Full Cancellation
+
+```http
+DELETE /api/v1/bookings/{pnr}
+```
+
+Cancels entire booking.
+
+---
+
+### Partial Passenger Cancellation
+
+```http
+DELETE /api/v1/bookings/{pnr}/passengers/{passengerId}
+```
+
+Cancels only selected passenger.
+
+---
+
+## 🔄 Promotion Flow
+
+```text
+CONFIRMED Cancelled
+        ↓
+RAC → CONFIRMED
+        ↓
+WAITLIST → RAC
+        ↓
+Reorder RAC/WL Queue
+```
+
+---
+
+## 🧠 Segment-Based Reservation
 
 TrainTicker supports journey segment allocation similar to real railway systems.
 
@@ -214,7 +276,7 @@ Same seat can be reused without overlap.
 
 ---
 
-# 💰 Fare Configuration
+## 💰 Fare Configuration
 
 Supports:
 
@@ -223,6 +285,38 @@ Supports:
 * Waiting limit
 * Tatkal quota
 * Dynamic pricing support
+
+---
+
+# ⚡ Redis PNR Caching
+
+TrainTicker uses Redis caching for high-speed PNR retrieval.
+
+Flow:
+
+```text
+PNR Request
+    ↓
+Redis Cache
+    ↓
+Cache Hit → Return Response
+    ↓
+Cache Miss → Fetch DB → Store Cache
+```
+
+Features:
+
+* Redis-based caching
+* Automatic cache eviction
+* Reduced database load
+* Faster PNR fetch
+
+Technologies:
+
+* Spring Cache
+* Redis
+* CacheEvict
+* Cacheable
 
 ---
 
@@ -235,6 +329,7 @@ Supports:
 | Spring Data JPA | ORM                   |
 | Hibernate       | Persistence           |
 | PostgreSQL      | Database              |
+| Redis           | Distributed Caching   |
 | Lombok          | Boilerplate Reduction |
 | Maven           | Build Tool            |
 
@@ -259,27 +354,27 @@ src/main/java/com/kgstrivers/trainticker
 
 # 🧩 Entity Relationships
 
-# Train
+## Train
 
 * One Train → Many RouteStations
 * One Train → Many Coaches
 * One Train → Many Schedules
 * One Train → Many Bookings
 
-# Coach
+## Coach
 
 * One Coach → Many Seats
 
-# Booking
+## Booking
 
 * One Booking → Many Passengers
 * One Booking → Many BookedSeats
 
-# Passenger
+## Passenger
 
-* One Passenger → One Allocated Seat
+* One Passenger → Many Bookings
 
-# RouteStation
+## RouteStation
 
 * Many RouteStations → One Station
 
@@ -304,15 +399,15 @@ Core Tables:
 
 # 🚀 APIs
 
-# 🚆 Train APIs
+## 🚆 Train APIs
 
-## Create Train
+### Create Train
 
 ```http
 POST /api/v1/trains
 ```
 
-## Get Train
+### Get Train
 
 ```http
 GET /api/v1/trains/{id}
@@ -320,37 +415,49 @@ GET /api/v1/trains/{id}
 
 ---
 
-# 🎟 Booking APIs
+## 🎟 Booking APIs
 
-## Book Ticket
+### Book Ticket
 
 ```http
 POST /api/v1/bookings
 ```
 
-## Get Booking By PNR
+### Get Booking By PNR
 
 ```http
 GET /api/v1/bookings/{pnr}
 ```
 
+### Cancel Booking
+
+```http
+DELETE /api/v1/bookings/{pnr}
+```
+
+### Cancel Passenger
+
+```http
+DELETE /api/v1/bookings/{pnr}/passengers/{passengerId}
+```
+
 ---
 
-# ⚙️ Coach Configuration APIs
+## ⚙️ Coach Configuration APIs
 
-## Create Coach Configurations
+### Create Coach Configurations
 
 ```http
 POST /api/v1/coach-configs
 ```
 
-## Get All Configurations
+### Get All Configurations
 
 ```http
 GET /api/v1/coach-configs
 ```
 
-## Get Single Configuration
+### Get Single Configuration
 
 ```http
 GET /api/v1/coach-configs/{coachType}
@@ -364,12 +471,9 @@ GET /api/v1/coach-configs/{coachType}
 {
   "trainNumber": "12301",
   "journeyDate": "2026-06-15",
-
   "sourceStationCode": "HWH",
   "destinationStationCode": "NDLS",
-
   "classType": "3A",
-
   "passengers": [
     {
       "name": "Kaushik Ghosh",
@@ -387,16 +491,14 @@ GET /api/v1/coach-configs/{coachType}
 
 ---
 
-# 📤 Sample Response
+# 📤 Sample Responses
 
 ## CONFIRMED
 
 ```json
 {
   "pnr": "8745632198",
-
   "bookingStatus": "CONFIRMED",
-
   "passengers": [
     {
       "passengerName": "Kaushik Ghosh",
@@ -415,9 +517,7 @@ GET /api/v1/coach-configs/{coachType}
 ```json
 {
   "pnr": "8745632198",
-
   "bookingStatus": "RAC",
-
   "passengers": [
     {
       "passengerName": "Kaushik Ghosh",
@@ -431,20 +531,18 @@ GET /api/v1/coach-configs/{coachType}
 
 ---
 
-## WAITING
+## WAITLIST
 
 ```json
 {
   "pnr": "8745632198",
-
-  "bookingStatus": "WAITING",
-
+  "bookingStatus": "WAITLIST",
   "passengers": [
     {
       "passengerName": "Kaushik Ghosh",
       "coachNumber": null,
       "seatNumber": "WL-12",
-      "bookingStatus": "WAITING"
+      "bookingStatus": "WAITLIST"
     }
   ]
 }
@@ -454,7 +552,7 @@ GET /api/v1/coach-configs/{coachType}
 
 # ⚙️ How To Run
 
-# Clone Repository
+## Clone Repository
 
 ```bash
 git clone <your-github-url>
@@ -462,7 +560,7 @@ git clone <your-github-url>
 
 ---
 
-# Configure PostgreSQL
+## Configure PostgreSQL
 
 Update:
 
@@ -482,7 +580,27 @@ spring.jpa.hibernate.ddl-auto=update
 
 ---
 
-# Run Application
+## Configure Redis
+
+```properties
+spring.cache.type=redis
+
+spring.data.redis.host=localhost
+
+spring.data.redis.port=6379
+```
+
+---
+
+## Run Redis
+
+```bash
+redis-server
+```
+
+---
+
+## Run Application
 
 ```bash
 mvn spring-boot:run
@@ -499,10 +617,10 @@ mvn spring-boot:run
 * Redis Seat Locking
 * Kafka Booking Queue
 * Distributed Locking
-* Cancellation & Refund
 * JWT Authentication
 * Email/SMS Notifications
 * Payment Integration
+* Refund Processing
 * AI Based Demand Pricing
 
 ---
@@ -517,6 +635,11 @@ mvn spring-boot:run
 * Segment-Based Reservation
 * RAC/WL Promotion Logic
 * Schedule Management
+* Redis Distributed Caching
+* Cache Eviction Strategy
+* Automatic Queue Promotion
+* Partial Cancellation Workflow
+* Passenger-level Reservation State
 * Production-style API Design
 
 ---
@@ -531,6 +654,11 @@ This project demonstrates:
 * Production-grade booking workflow
 * Complex seat allocation systems
 * RAC & Waiting List handling
+* Redis caching strategies
+* Queue-based reservation systems
+* Automatic RAC/WL promotion logic
+* Partial booking cancellation handling
+* Cache invalidation techniques
 
 ---
 
