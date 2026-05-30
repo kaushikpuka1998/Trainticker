@@ -33,4 +33,7 @@ public class BookedSeat {
     @ManyToOne(cascade = CascadeType.PERSIST)
     @JoinColumn(name = "passenger_id")
     private Passenger passenger;
+
+    private Integer racNumber;
+    private Integer waitingNumber;
 }

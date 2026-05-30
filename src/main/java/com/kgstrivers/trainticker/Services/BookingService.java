@@ -9,10 +9,15 @@ import com.kgstrivers.trainticker.Enums.BookingStatus;
 import com.kgstrivers.trainticker.Enums.Gender;
 import com.kgstrivers.trainticker.Enums.SeatStatus;
 import com.kgstrivers.trainticker.Repositories.*;
+import jakarta.annotation.Nullable;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -23,12 +28,21 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Transactional
 public class BookingService {
+
+    @Autowired
     private final TrainRepository trainRepository;
+    @Autowired
     private final RouteStationRepository routeStationRepository;
+    @Autowired
     private final SeatRepository seatRepository;
+    @Autowired
     private final BookingRepository bookingRepository;
+    @Autowired
     private final StationRepository stationRepository;
+    @Autowired
     private final CoachTypeConfigRepository coachTypeConfigRepository;
+    @Autowired
+    private final BookedSeatRepository bookedSeatRepository;
 
     public BookingResponse bookTicket(BookingRequest request) {
         Train train = trainRepository.findByTrainNumber(request.getTrainNumber()).orElseThrow(() -> new RuntimeException("Train not found"));
@@ -41,7 +55,7 @@ public class BookingService {
         }
         List<Seat> allSeats = seatRepository.findByCoach_Train_IdAndCoach_CoachType(train.getId(), request.getClassType());
         List<Booking> existingBookings = bookingRepository.findByTrain_IdAndJourneyDate(train.getId(), request.getJourneyDate());
-        Set<Integer> bookedSeatIds = existingBookings.stream().flatMap(booking -> booking.getBookedSeats().stream()).map(bookedSeat -> bookedSeat.getSeat().getId()).collect(Collectors.toSet());
+        Set<Integer> bookedSeatIds = existingBookings.stream().flatMap(booking -> booking.getBookedSeats().stream()).filter(bookedSeat -> bookedSeat.getSeat() != null).map(bookedSeat -> bookedSeat.getSeat().getId()).collect(Collectors.toSet());
         List<Seat> availableSeats = allSeats.stream().filter(seat -> !bookedSeatIds.contains(seat.getId())).toList();
 
         CoachTypeConfig config =
@@ -137,15 +151,14 @@ public class BookingService {
             passenger.setGender(Gender.valueOf(passengerRequest.getGender()));
             passenger.setBooking(booking);
             passengers.add(passenger);
-            passenger.setRacNumber(racNumber);
-
-            passenger.setWaitingNumber(waitingNumber);
 
             BookedSeat bookedSeat = new BookedSeat();
             bookedSeat.setPassengerName(passenger.getName());
             bookedSeat.setPassengerAge(passenger.getAge());
             bookedSeat.setGender(passenger.getGender().name());
             bookedSeat.setBooking(booking);
+            bookedSeat.setRacNumber(racNumber);
+            bookedSeat.setWaitingNumber(waitingNumber);
             bookedSeat.setPassenger(passenger);
             if (seat != null) {
                 bookedSeat.setSeat(seat);
@@ -155,6 +168,7 @@ public class BookingService {
             booking.setStatus(seatStatus == SeatStatus.CONFIRMED ? BookingStatus.CONFIRMED : (seatStatus == SeatStatus.RAC ? BookingStatus.RAC : BookingStatus.WAITLIST));
 
             passengerResponses.add(PassengerSeatResponse.builder()
+                    .id(passenger.getId())
                     .passengerName(passenger.getName())
                     .coachNumber(
                             seat != null
@@ -202,6 +216,10 @@ public class BookingService {
         return mask;
     }
 
+    @Cacheable(
+            value = "pnrCache",
+            key = "#pnr"
+    )
     public BookingResponse getBookingByPnr(String pnr) {
         return bookingRepository.findByPnr(pnr)
                 .map(booking -> {
@@ -234,7 +252,6 @@ public class BookingService {
                                                 seatNumber =
                                                         "RAC-"
                                                                 + bookedSeat
-                                                                .getPassenger()
                                                                 .getRacNumber();
 
                                             } else if (
@@ -245,7 +262,6 @@ public class BookingService {
                                                 seatNumber =
                                                         "WL-"
                                                                 + bookedSeat
-                                                                .getPassenger()
                                                                 .getWaitingNumber();
                                             }
                                         }
@@ -255,6 +271,9 @@ public class BookingService {
 
                                                 .passengerName(
                                                         bookedSeat.getPassengerName()
+                                                )
+                                                .id(
+                                                        bookedSeat.getPassenger().getId()
                                                 )
 
                                                 .coachNumber(
@@ -323,5 +342,125 @@ public class BookingService {
                                 "Booking not found"
                         )
                 );
+    }
+
+    @CacheEvict(
+            value = "pnrCache",
+            key = "#pnr"
+    )
+    @Transactional
+    public void cancelTicket(
+            String pnr,
+            Long passengerId
+    ) {
+
+        Booking booking = bookingRepository.findByPnr(pnr).orElseThrow(() -> new RuntimeException("Booking not found"));
+
+        // FULL CANCELLATION
+
+        if (passengerId == null) {
+            List<BookedSeat> confirmedSeats = booking.getBookedSeats().stream().toList();
+
+            for (BookedSeat cancelledSeat
+                    : confirmedSeats) {
+                Seat releasedSeat = cancelledSeat.getSeat();
+                cancelledSeat.setSeatStatus(SeatStatus.CANCELLED);
+                cancelledSeat.setSeat(null);
+            }
+
+            booking.setStatus(BookingStatus.CANCELLED);
+            promoteRacPassenger(booking.getTrain().getId(), booking.getJourneyDate(), null);
+        }
+
+        // PARTIAL CANCELLATION
+
+        else {
+
+            BookedSeat cancelledSeat = booking.getBookedSeats().stream().filter(bookedSeat -> bookedSeat.getPassenger().getId()
+                                                    .equals(passengerId))
+                                                    .findFirst()
+                                                    .orElseThrow(() -> new RuntimeException("Passenger not found"));
+
+            SeatStatus oldStatus = cancelledSeat.getSeatStatus();
+            if (oldStatus == SeatStatus.CONFIRMED) {
+                Seat releasedSeat = cancelledSeat.getSeat();
+                cancelledSeat.setSeatStatus(SeatStatus.CANCELLED);
+                cancelledSeat.setSeat(null);
+                promoteRacPassenger(booking.getTrain().getId(), booking.getJourneyDate(), releasedSeat);
+            } else {
+                cancelledSeat.setSeatStatus(SeatStatus.CANCELLED);
+                if (oldStatus == SeatStatus.RAC) {
+                    reorderRacList(booking.getTrain().getId(), booking.getJourneyDate());
+                } else if (oldStatus == SeatStatus.WAITLIST) {
+                    reorderWaitingList(booking.getTrain().getId(), booking.getJourneyDate());
+                }
+            }
+            // Check if all passengers canceled
+            boolean allCancelled = booking.getBookedSeats().stream().allMatch(bookedSeat -> bookedSeat.getSeatStatus() == SeatStatus.CANCELLED);
+
+            if (allCancelled) {
+                booking.setStatus(BookingStatus.CANCELLED);
+            }
+        }
+
+        bookingRepository.save(booking);
+    }
+
+    private void promoteRacPassenger(Long trainId, LocalDate journeyDate, Seat releasedSeat) {
+        List<BookedSeat> racPassengers = bookedSeatRepository.findByBooking_Train_IdAndBooking_JourneyDateAndSeatStatusOrderByIdAsc(trainId, journeyDate, SeatStatus.RAC);
+        if (racPassengers.isEmpty()) {
+            return;
+        }
+        BookedSeat racPassenger = racPassengers.get(0);
+        racPassenger.setSeat(releasedSeat);
+        racPassenger.setSeatStatus(SeatStatus.CONFIRMED);
+        racPassenger.getBooking().setStatus(BookingStatus.CONFIRMED);
+        bookedSeatRepository.save(racPassenger);
+        promoteWaitingPassenger(trainId, journeyDate);
+    }
+
+    private void promoteWaitingPassenger(Long trainId, LocalDate journeyDate) {
+        List<BookedSeat> waitingPassengers = bookedSeatRepository.findByBooking_Train_IdAndBooking_JourneyDateAndSeatStatusOrderByIdAsc(trainId, journeyDate, SeatStatus.WAITLIST);
+        if (waitingPassengers.isEmpty()) {
+            return;
+        }
+        BookedSeat waitingPassenger = waitingPassengers.get(0);
+        waitingPassenger.setSeatStatus(SeatStatus.RAC);
+        waitingPassenger.getBooking().setStatus(BookingStatus.RAC);
+        bookedSeatRepository.save(waitingPassenger);
+        reorderWaitingList(trainId, journeyDate);
+        reorderRacList(trainId, journeyDate);
+    }
+
+    private void reorderRacList(Long trainId, LocalDate journeyDate) {
+        List<BookedSeat> racPassengers = bookedSeatRepository.findByBooking_Train_IdAndBooking_JourneyDateAndSeatStatusOrderByIdAsc(trainId, journeyDate, SeatStatus.RAC);
+        for (int i = 0; i < racPassengers.size(); i++) {
+            racPassengers.get(i).setRacNumber(i + 1);
+        }
+    }
+
+    private void reorderWaitingList(Long trainId, LocalDate journeyDate) {
+        List<BookedSeat> waitingPassengers = bookedSeatRepository.findByBooking_Train_IdAndBooking_JourneyDateAndSeatStatusOrderByIdAsc(trainId, journeyDate, SeatStatus.WAITLIST);
+        for (int i = 0; i < waitingPassengers.size(); i++) {
+            waitingPassengers.get(i).setWaitingNumber(i + 1);
+        }
+    }
+
+
+    public void cancelPassengerFromBooking(String pnr, Long passengerId) {
+        Booking booking = bookingRepository.findByPnr(pnr)
+                .orElseThrow(() -> new RuntimeException("Booking not found"));
+        boolean allCancelled =
+                booking.getPassengers()
+                        .stream()
+                        .allMatch(
+                                passenger ->
+                                        passenger.getStatus()
+                                                == BookingStatus.CANCELLED
+                        );
+
+        if (allCancelled) {
+            booking.setStatus(BookingStatus.CANCELLED);
+        }
     }
 }

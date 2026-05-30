@@ -1,6 +1,7 @@
 package com.kgstrivers.trainticker.Entities;
 
 
+import com.kgstrivers.trainticker.Enums.BookingStatus;
 import com.kgstrivers.trainticker.Enums.Gender;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -25,6 +26,6 @@ public class Passenger {
     @JoinColumn(name = "booking_id")
     private Booking booking;
 
-    private Integer racNumber;
-    private Integer waitingNumber;
+    @Enumerated(EnumType.STRING)
+    private BookingStatus status;
 }

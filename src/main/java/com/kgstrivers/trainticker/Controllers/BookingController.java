@@ -2,14 +2,10 @@ package com.kgstrivers.trainticker.Controllers;
 
 import com.kgstrivers.trainticker.DAO.BookingRequest;
 import com.kgstrivers.trainticker.DAO.BookingResponse;
-import com.kgstrivers.trainticker.Entities.Booking;
 import com.kgstrivers.trainticker.Services.BookingService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.ArrayList;
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/bookings")
@@ -24,6 +20,23 @@ public class BookingController {
 
     @GetMapping("/{pnr}")
     public ResponseEntity<BookingResponse> getBookingByPnr(@PathVariable String pnr) {
+        return ResponseEntity.ok(bookingService.getBookingByPnr(pnr));
+    }
+
+    @PatchMapping("/{pnr}/passengers")
+    public ResponseEntity<BookingResponse> cancelPassengerFromBooking(
+            @PathVariable String pnr){
+
+        bookingService.cancelTicket(pnr, null);
+        return ResponseEntity.ok(bookingService.getBookingByPnr(pnr));
+    }
+
+    @PatchMapping("/{pnr}/passengers/{passengerId}")
+    public ResponseEntity<BookingResponse> cancelPassengerFromBookingById(
+            @PathVariable String pnr,
+            @PathVariable Long passengerId){
+
+        bookingService.cancelTicket(pnr, passengerId);
         return ResponseEntity.ok(bookingService.getBookingByPnr(pnr));
     }
 }
