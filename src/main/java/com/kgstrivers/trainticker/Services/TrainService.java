@@ -1,15 +1,11 @@
 package com.kgstrivers.trainticker.Services;
 
-import com.kgstrivers.trainticker.Entities.Coach;
-import com.kgstrivers.trainticker.Entities.Seat;
 import com.kgstrivers.trainticker.Entities.Station;
 import com.kgstrivers.trainticker.Entities.Train;
 import com.kgstrivers.trainticker.Repositories.StationRepository;
 import com.kgstrivers.trainticker.Repositories.TrainRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-
-import java.util.ArrayList;
 import java.util.List;
 
 @Service
