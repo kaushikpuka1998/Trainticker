@@ -60,10 +60,10 @@ public class BookingService {
 
         CoachTypeConfig config =
                 coachTypeConfigRepository
-                        .findByCoachType(
-                                request.getClassType()
-                        )
-                        .orElseThrow();
+                        .findByCoachType(request.getClassType())
+                        .orElseThrow(() -> new IllegalArgumentException(
+                                "Coach Type not found: " + request.getClassType()
+                        ));
 
         long confirmedBookedCount =
                 existingBookings.stream()
@@ -120,6 +120,7 @@ public class BookingService {
         List<BookedSeat> bookedSeats = new ArrayList<>();
 
         List<PassengerSeatResponse> passengerResponses = new ArrayList<>();
+        int seatIndex = 0;
         for (int i = 0; i < request.getPassengers().size(); i++) {
             PassengerRequest passengerRequest =
                     request.getPassengers().get(i);
@@ -128,9 +129,8 @@ public class BookingService {
             SeatStatus seatStatus;
             Integer racNumber = null;
             Integer waitingNumber = null;
-
             if (confirmedBookedCount < config.getConfirmedCapacity()) {
-                seat = availableSeats.get((int) confirmedBookedCount);
+                seat = availableSeats.get(seatIndex++);
                 seatStatus = SeatStatus.CONFIRMED;
                 confirmedBookedCount++;
             } else if (existingRacCount < config.getRacCapacity()) {
