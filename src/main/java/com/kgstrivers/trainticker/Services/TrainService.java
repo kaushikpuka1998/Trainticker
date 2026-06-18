@@ -2,9 +2,11 @@ package com.kgstrivers.trainticker.Services;
 
 import com.kgstrivers.trainticker.Entities.Station;
 import com.kgstrivers.trainticker.Entities.Train;
+import com.kgstrivers.trainticker.Entities.TrainDTO;
 import com.kgstrivers.trainticker.Repositories.StationRepository;
 import com.kgstrivers.trainticker.Repositories.TrainRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import java.util.List;
 
@@ -31,8 +33,12 @@ public class TrainService {
         return trainRepository.save(updatedTrain);
     }
 
-    public Train getTrain(String trainNumber){
-        return trainRepository.findByTrainNumber(trainNumber).orElse(null);
+
+    @Cacheable(value = "trains", key = "#trainNumber")
+    public TrainDTO getTrain(String trainNumber){
+        return trainRepository.findByTrainNumber(trainNumber)
+                .map(TrainDTO::from)   // map inside the transaction, while session is open
+                .orElse(null);
     }
 
     private Train findDuplicateStation(Train train) {

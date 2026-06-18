@@ -2,6 +2,7 @@ package com.kgstrivers.trainticker.Controllers;
 
 
 import com.kgstrivers.trainticker.Entities.Train;
+import com.kgstrivers.trainticker.Entities.TrainDTO;
 import com.kgstrivers.trainticker.Services.TrainService;
 import org.apache.coyote.Response;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,7 +24,7 @@ public class TrainController {
     }
 
     @GetMapping("/trains/{trainNumber}")
-    public ResponseEntity<Train> getTrainDetails(@PathVariable String trainNumber){
+    public ResponseEntity<TrainDTO> getTrainDetails(@PathVariable String trainNumber){
         return ResponseEntity.ok(trainService.getTrain(trainNumber));
     }
 
