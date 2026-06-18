@@ -20,6 +20,8 @@ public class Train {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+
+    @Column(unique = true)
     private String trainNumber;
 
     private String trainName;
