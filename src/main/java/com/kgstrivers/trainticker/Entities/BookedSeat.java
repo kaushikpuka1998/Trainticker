@@ -2,11 +2,17 @@ package com.kgstrivers.trainticker.Entities;
 
 import com.kgstrivers.trainticker.Enums.SeatStatus;
 import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
+import lombok.RequiredArgsConstructor;
 
 @Entity
 @Table(name = "booked_seats")
 @Data
+@AllArgsConstructor
+@RequiredArgsConstructor
+@Builder
 public class BookedSeat {
 
     @Id

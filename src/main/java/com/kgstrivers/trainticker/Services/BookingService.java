@@ -20,6 +20,7 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
@@ -50,6 +51,9 @@ public class BookingService {
         Station destination = stationRepository.findByCode(request.getDestinationStationCode()).orElseThrow(() -> new RuntimeException("Destination station not found"));
         RouteStation sourceRoute = routeStationRepository.findByTrain_IdAndStation_Code(train.getId(), source.getCode()).orElseThrow();
         RouteStation destinationRoute = routeStationRepository.findByTrain_IdAndStation_Code(train.getId(), destination.getCode()).orElseThrow();
+        if(request.getJourneyDate().isBefore(LocalDate.now())) {
+            throw new RuntimeException("Please Provide future Journey Date");
+        }
         if (sourceRoute.getStationOrder() >= destinationRoute.getStationOrder()) {
             throw new RuntimeException("Invalid route");
         }
@@ -58,6 +62,9 @@ public class BookingService {
         Set<Integer> bookedSeatIds = existingBookings.stream().flatMap(booking -> booking.getBookedSeats().stream()).filter(bookedSeat -> bookedSeat.getSeat() != null).map(bookedSeat -> bookedSeat.getSeat().getId()).collect(Collectors.toSet());
         List<Seat> availableSeats = allSeats.stream().filter(seat -> !bookedSeatIds.contains(seat.getId())).toList();
 
+        if (Objects.equals(request.getClassType(), "PANTRY")) {
+            throw new IllegalArgumentException("Pantry coaches are not bookable");
+        }
         CoachTypeConfig config =
                 coachTypeConfigRepository
                         .findByCoachType(request.getClassType())
@@ -118,8 +125,6 @@ public class BookingService {
 
         List<Passenger> passengers = new ArrayList<>();
         List<BookedSeat> bookedSeats = new ArrayList<>();
-
-        List<PassengerSeatResponse> passengerResponses = new ArrayList<>();
         int seatIndex = 0;
         for (int i = 0; i < request.getPassengers().size(); i++) {
             PassengerRequest passengerRequest =
@@ -145,53 +150,45 @@ public class BookingService {
                 throw new RuntimeException("No seats available");
             }
 
-            Passenger passenger = new Passenger();
-            passenger.setName(passengerRequest.getName());
-            passenger.setAge(passengerRequest.getAge());
-            passenger.setGender(Gender.valueOf(passengerRequest.getGender()));
-            passenger.setBooking(booking);
+            Passenger passenger = Passenger.builder()
+                    .name(passengerRequest.getName())
+                    .age(passengerRequest.getAge())
+                    .gender(Gender.valueOf(passengerRequest.getGender()))
+                    .booking(booking)
+                    .build();
             passengers.add(passenger);
 
-            BookedSeat bookedSeat = new BookedSeat();
-            bookedSeat.setPassengerName(passenger.getName());
-            bookedSeat.setPassengerAge(passenger.getAge());
-            bookedSeat.setGender(passenger.getGender().name());
-            bookedSeat.setBooking(booking);
-            bookedSeat.setRacNumber(racNumber);
-            bookedSeat.setWaitingNumber(waitingNumber);
-            bookedSeat.setPassenger(passenger);
-            if (seat != null) {
-                bookedSeat.setSeat(seat);
-            }
-            bookedSeat.setSeatStatus(seatStatus);
+            BookedSeat bookedSeat = BookedSeat.builder()
+                    .passengerName(passenger.getName())
+                    .passengerAge(passenger.getAge())
+                    .gender(passenger.getGender().name())
+                    .booking(booking)
+                    .racNumber(racNumber)
+                    .waitingNumber(waitingNumber)
+                    .passenger(passenger)
+                    .seat(seat)
+                    .seatStatus(seatStatus)
+                    .build();
             bookedSeats.add(bookedSeat);
             booking.setStatus(seatStatus == SeatStatus.CONFIRMED ? BookingStatus.CONFIRMED : (seatStatus == SeatStatus.RAC ? BookingStatus.RAC : BookingStatus.WAITLIST));
-
-            passengerResponses.add(PassengerSeatResponse.builder()
-                    .id(passenger.getId())
-                    .passengerName(passenger.getName())
-                    .coachNumber(
-                            seat != null
-                                    ? seat.getCoach().getCoachNumber()
-                                    : null
-                    )
-
-                    .seatNumber(
-                            seat != null
-                                    ? seat.getSeatNumber()
-                                    : (
-                                    racNumber != null
-                                    ? "RAC-" + racNumber
-                                    : "WL-" + waitingNumber
-                            )
-                    )
-                    .bookingStatus(String.valueOf(seatStatus))
-                    .build()
-            );
         }
-
+        booking.setPassengers(passengers);
         booking.setBookedSeats(bookedSeats);
         bookingRepository.save(booking);
+
+        List<PassengerSeatResponse> passengerResponses = new ArrayList<>();
+        for (BookedSeat bs : bookedSeats) {
+            Passenger p = bs.getPassenger();
+            passengerResponses.add(PassengerSeatResponse.builder()
+                    .id(p.getId())
+                    .passengerName(bs.getPassengerName())
+                    .coachNumber(bs.getSeat() != null ? bs.getSeat().getCoach().getCoachNumber() : null)
+                    .seatNumber(bs.getSeat() != null
+                            ? bs.getSeat().getSeatNumber()
+                            : (bs.getRacNumber() != null ? "RAC-" + bs.getRacNumber() : "WL-" + bs.getWaitingNumber()))
+                    .bookingStatus(String.valueOf(bs.getSeatStatus()))
+                    .build());
+        }
         return BookingResponse.builder().pnr(booking.getPnr()).trainNumber(train.getTrainNumber()).trainName(train.getTrainName()).journeyDate(request.getJourneyDate()).source(source.getCode()).destination(destination.getCode()).bookingStatus(String.valueOf(booking.getStatus())).passengers(passengerResponses).build();
     }
 
@@ -415,6 +412,7 @@ public class BookingService {
         racPassenger.setSeat(releasedSeat);
         racPassenger.setSeatStatus(SeatStatus.CONFIRMED);
         racPassenger.getBooking().setStatus(BookingStatus.CONFIRMED);
+        racPassenger.setRacNumber(null);
         bookedSeatRepository.save(racPassenger);
         promoteWaitingPassenger(trainId, journeyDate);
     }
@@ -427,6 +425,7 @@ public class BookingService {
         BookedSeat waitingPassenger = waitingPassengers.get(0);
         waitingPassenger.setSeatStatus(SeatStatus.RAC);
         waitingPassenger.getBooking().setStatus(BookingStatus.RAC);
+        waitingPassenger.setWaitingNumber(null);
         bookedSeatRepository.save(waitingPassenger);
         reorderWaitingList(trainId, journeyDate);
         reorderRacList(trainId, journeyDate);
@@ -437,6 +436,7 @@ public class BookingService {
         for (int i = 0; i < racPassengers.size(); i++) {
             racPassengers.get(i).setRacNumber(i + 1);
         }
+        bookedSeatRepository.saveAll(racPassengers);
     }
 
     private void reorderWaitingList(Long trainId, LocalDate journeyDate) {
@@ -444,6 +444,7 @@ public class BookingService {
         for (int i = 0; i < waitingPassengers.size(); i++) {
             waitingPassengers.get(i).setWaitingNumber(i + 1);
         }
+        bookedSeatRepository.saveAll(waitingPassengers);
     }
 
 
