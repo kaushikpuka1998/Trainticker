@@ -45,6 +45,7 @@ public class Coach {
                 case "2A" -> 54;
                 case "3A" -> 72;
                 case "SL" -> 80;
+                case "PANTRY" -> 0;
                 default -> 50;
             };
 

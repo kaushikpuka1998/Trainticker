@@ -5,6 +5,7 @@ import com.kgstrivers.trainticker.Enums.BookingStatus;
 import com.kgstrivers.trainticker.Enums.Gender;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 
@@ -13,6 +14,7 @@ import lombok.RequiredArgsConstructor;
 @AllArgsConstructor
 @RequiredArgsConstructor
 @Data
+@Builder
 public class Passenger {
     @Id
     @GeneratedValue(strategy = jakarta.persistence.GenerationType.IDENTITY)

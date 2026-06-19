@@ -47,7 +47,8 @@ public class Booking {
 
     @OneToMany(
             mappedBy = "booking",
-            cascade = CascadeType.ALL
+            cascade = CascadeType.ALL,
+            orphanRemoval = true
     )
     private List<Passenger> passengers;
 }
