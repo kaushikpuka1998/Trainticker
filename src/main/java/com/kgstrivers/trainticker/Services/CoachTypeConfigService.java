@@ -16,12 +16,9 @@ public class CoachTypeConfigService {
     @Transactional
     public List<CoachTypeConfig> saveAllConfigs(List<CoachTypeConfig> configs) {
         List<CoachTypeConfig> toSave = configs.stream()
-                .map(incoming -> {
-                    coachTypeConfigRepository
-                            .findByCoachType(incoming.getCoachType())
-                            .ifPresent(existing -> incoming.setId(existing.getId()));
-                    return incoming;
-                })
+                .peek(incoming -> coachTypeConfigRepository
+                        .findByCoachType(incoming.getCoachType())
+                        .ifPresent(existing -> incoming.setId(existing.getId())))
                 .toList();
         return coachTypeConfigRepository.saveAll(toSave);
     }
