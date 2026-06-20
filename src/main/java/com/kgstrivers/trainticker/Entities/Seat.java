@@ -17,6 +17,7 @@ public class Seat {
     @GeneratedValue(strategy = jakarta.persistence.GenerationType.IDENTITY)
     private int id;
     private String seatNumber;
+    private BerthType berthType;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "coach_id")

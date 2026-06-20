@@ -1,5 +1,7 @@
 package com.kgstrivers.trainticker.DAO;
 
+import com.kgstrivers.trainticker.Entities.BerthType;
+import jakarta.annotation.Nullable;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -15,4 +17,6 @@ public class PassengerSeatResponse {
     private String coachNumber;
     private String seatNumber;
     private String bookingStatus;
+    @Nullable
+    private BerthType berthType;
 }

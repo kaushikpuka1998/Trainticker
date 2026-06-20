@@ -8,6 +8,8 @@ import com.kgstrivers.trainticker.Entities.*;
 import com.kgstrivers.trainticker.Enums.BookingStatus;
 import com.kgstrivers.trainticker.Enums.Gender;
 import com.kgstrivers.trainticker.Enums.SeatStatus;
+import com.kgstrivers.trainticker.Exception.InvalidBookingException;
+import com.kgstrivers.trainticker.Exception.ResourceNotFoundException;
 import com.kgstrivers.trainticker.Repositories.*;
 import jakarta.annotation.Nullable;
 import jakarta.transaction.Transactional;
@@ -46,17 +48,35 @@ public class BookingService {
     private final BookedSeatRepository bookedSeatRepository;
 
     public BookingResponse bookTicket(BookingRequest request) {
-        Train train = trainRepository.findByTrainNumber(request.getTrainNumber()).orElseThrow(() -> new RuntimeException("Train not found"));
-        Station source = stationRepository.findByCode(request.getSourceStationCode()).orElseThrow(() -> new RuntimeException("Source station not found"));
-        Station destination = stationRepository.findByCode(request.getDestinationStationCode()).orElseThrow(() -> new RuntimeException("Destination station not found"));
-        RouteStation sourceRoute = routeStationRepository.findByTrain_IdAndStation_Code(train.getId(), source.getCode()).orElseThrow();
-        RouteStation destinationRoute = routeStationRepository.findByTrain_IdAndStation_Code(train.getId(), destination.getCode()).orElseThrow();
+        Train train = trainRepository.findByTrainNumber(request.getTrainNumber()).orElseThrow(() -> new ResourceNotFoundException("Train", request.getTrainNumber()));
+        Station source = stationRepository.findByCode(request.getSourceStationCode()).orElseThrow(() -> new ResourceNotFoundException("Source station", request.getSourceStationCode()));
+        Station destination = stationRepository.findByCode(request.getDestinationStationCode()).orElseThrow(() -> new ResourceNotFoundException("Destination station", request.getDestinationStationCode()));
+        RouteStation sourceRoute = routeStationRepository
+                .findByTrain_IdAndStation_Code(train.getId(), source.getCode())
+                .orElseThrow(() -> new ResourceNotFoundException("Route for source", source.getCode()));
+        RouteStation destinationRoute = routeStationRepository.findByTrain_IdAndStation_Code(train.getId(), destination.getCode())
+                .orElseThrow(() -> new ResourceNotFoundException("Route for destination", destination.getCode()));
+
+
         if(request.getJourneyDate().isBefore(LocalDate.now())) {
             throw new RuntimeException("Please Provide future Journey Date");
         }
         if (sourceRoute.getStationOrder() >= destinationRoute.getStationOrder()) {
             throw new RuntimeException("Invalid route");
         }
+
+        if (request.getJourneyDate().isBefore(LocalDate.now())) {
+            throw new InvalidBookingException("Journey date must be in the future");
+        }
+
+        if (sourceRoute.getStationOrder() >= destinationRoute.getStationOrder()) {
+            throw new InvalidBookingException("Invalid route: source must come before destination");
+        }
+
+        if (Objects.equals(request.getClassType(), "PANTRY")) {
+            throw new InvalidBookingException("Pantry coaches are not bookable");
+        }
+
         List<Seat> allSeats = seatRepository.findByCoach_Train_IdAndCoach_CoachType(train.getId(), request.getClassType());
         List<Booking> existingBookings = bookingRepository.findByTrain_IdAndJourneyDate(train.getId(), request.getJourneyDate());
         Set<Integer> bookedSeatIds = existingBookings.stream().flatMap(booking -> booking.getBookedSeats().stream()).filter(bookedSeat -> bookedSeat.getSeat() != null).map(bookedSeat -> bookedSeat.getSeat().getId()).collect(Collectors.toSet());
@@ -186,6 +206,7 @@ public class BookingService {
                     .seatNumber(bs.getSeat() != null
                             ? bs.getSeat().getSeatNumber()
                             : (bs.getRacNumber() != null ? "RAC-" + bs.getRacNumber() : "WL-" + bs.getWaitingNumber()))
+                    .berthType(bs.getSeat() != null ? bs.getSeat().getBerthType() : null)
                     .bookingStatus(String.valueOf(bs.getSeatStatus()))
                     .build());
         }
@@ -218,127 +239,97 @@ public class BookingService {
             key = "#pnr"
     )
     public BookingResponse getBookingByPnr(String pnr) {
-        return bookingRepository.findByPnr(pnr)
-                .map(booking -> {
+            return bookingRepository.findByPnr(pnr)
+                    .map(booking -> {
 
-                    List<PassengerSeatResponse> passengerResponses =
-                            booking.getBookedSeats()
-                                    .stream()
-                                    .map(bookedSeat -> {
+                        List<PassengerSeatResponse> passengerResponses =
+                                booking.getBookedSeats()
+                                        .stream()
+                                        .map(bookedSeat -> {
 
-                                        String coachNumber = null;
+                                            String coachNumber = null;
+                                            String seatNumber = null;
 
-                                        String seatNumber = null;
+                                            if (bookedSeat.getSeat() != null) {
 
-                                        if (bookedSeat.getSeat() != null) {
-
-                                            coachNumber =
-                                                    bookedSeat.getSeat()
-                                                            .getCoach()
-                                                            .getCoachNumber();
-
-                                            seatNumber =
-                                                    bookedSeat.getSeat()
-                                                            .getSeatNumber();
-
-                                        } else {
-
-                                            if (bookedSeat.getSeatStatus()
-                                                    == SeatStatus.RAC) {
+                                                coachNumber =
+                                                        bookedSeat.getSeat()
+                                                                .getCoach()
+                                                                .getCoachNumber();
 
                                                 seatNumber =
-                                                        "RAC-"
-                                                                + bookedSeat
-                                                                .getRacNumber();
+                                                        bookedSeat.getSeat()
+                                                                .getSeatNumber();
 
-                                            } else if (
-                                                    bookedSeat.getSeatStatus()
-                                                            == SeatStatus.WAITLIST
-                                            ) {
+                                            } else {
 
-                                                seatNumber =
-                                                        "WL-"
-                                                                + bookedSeat
-                                                                .getWaitingNumber();
+                                                if (bookedSeat.getSeatStatus()
+                                                        == SeatStatus.RAC) {
+
+                                                    seatNumber =
+                                                            "RAC-"
+                                                                    + bookedSeat
+                                                                    .getRacNumber();
+
+                                                } else if (
+                                                        bookedSeat.getSeatStatus()
+                                                                == SeatStatus.WAITLIST
+                                                ) {
+
+                                                    seatNumber =
+                                                            "WL-"
+                                                                    + bookedSeat
+                                                                    .getWaitingNumber();
+                                                }
                                             }
-                                        }
 
-                                        return PassengerSeatResponse
-                                                .builder()
+                                            BerthType berthType = null;
+                                            if (bookedSeat.getSeat() != null) {
+                                                berthType = bookedSeat.getSeat().getBerthType();
+                                            }
 
-                                                .passengerName(
-                                                        bookedSeat.getPassengerName()
-                                                )
-                                                .id(
-                                                        bookedSeat.getPassenger().getId()
-                                                )
+                                            return PassengerSeatResponse
+                                                    .builder()
 
-                                                .coachNumber(
-                                                        coachNumber
-                                                )
+                                                    .passengerName(
+                                                            bookedSeat.getPassengerName()
+                                                    )
+                                                    .id(
+                                                            bookedSeat.getPassenger().getId()
+                                                    )
 
-                                                .seatNumber(
-                                                        seatNumber
-                                                )
+                                                    .coachNumber(
+                                                            coachNumber
+                                                    )
 
-                                                .bookingStatus(
-                                                        String.valueOf(
-                                                                bookedSeat.getSeatStatus()
-                                                        )
-                                                )
+                                                    .seatNumber(
+                                                            seatNumber
+                                                    )
 
-                                                .build();
-                                    })
-                                    .toList();
+                                                    .bookingStatus(
+                                                            String.valueOf(
+                                                                    bookedSeat.getSeatStatus()
+                                                            )
+                                                    )
 
-                    return BookingResponse.builder()
+                                                    .berthType(berthType)
 
-                            .pnr(
-                                    booking.getPnr()
-                            )
+                                                    .build();
+                                        })
+                                        .toList();
 
-                            .trainNumber(
-                                    booking.getTrain()
-                                            .getTrainNumber()
-                            )
-
-                            .trainName(
-                                    booking.getTrain()
-                                            .getTrainName()
-                            )
-
-                            .journeyDate(
-                                    booking.getJourneyDate()
-                            )
-
-                            .source(
-                                    booking.getSourceStation()
-                                            .getCode()
-                            )
-
-                            .destination(
-                                    booking.getDestinationStation()
-                                            .getCode()
-                            )
-
-                            .bookingStatus(
-                                    String.valueOf(
-                                            booking.getStatus()
-                                    )
-                            )
-
-                            .passengers(
-                                    passengerResponses
-                            )
-
-                            .build();
-                })
-
-                .orElseThrow(
-                        () -> new RuntimeException(
-                                "Booking not found"
-                        )
-                );
+                        return BookingResponse.builder()
+                                .pnr(booking.getPnr())
+                                .trainNumber(booking.getTrain().getTrainNumber())
+                                .trainName(booking.getTrain().getTrainName())
+                                .journeyDate(booking.getJourneyDate())
+                                .source(booking.getSourceStation().getCode())
+                                .destination(booking.getDestinationStation().getCode())
+                                .bookingStatus(String.valueOf(booking.getStatus()))
+                                .passengers(passengerResponses)
+                                .build();
+                    })
+                    .orElseThrow(() -> new RuntimeException("Booking not found"));
     }
 
     @CacheEvict(
