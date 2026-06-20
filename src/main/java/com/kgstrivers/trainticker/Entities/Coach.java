@@ -35,9 +35,7 @@ public class Coach {
 
     @PrePersist
     public void generateSeats() {
-
         if (seats == null || seats.isEmpty()) {
-
             seats = new ArrayList<>();
 
             int totalSeats = switch (coachType) {
@@ -50,15 +48,40 @@ public class Coach {
             };
 
             for (int i = 1; i <= totalSeats; i++) {
-
                 Seat seat = new Seat();
-
                 seat.setSeatNumber(String.valueOf(i));
-
+                seat.setBerthType(resolveBerth(coachType, i));
                 seat.setCoach(this);
-
                 seats.add(seat);
             }
         }
+    }
+
+    private BerthType resolveBerth(String type, int seatNo) {
+        return switch (type) {
+            case "SL", "3A" -> {
+                int pos = ((seatNo - 1) % 8) + 1; // 1..8 per compartment
+                yield switch (pos) {
+                    case 1, 4 -> BerthType.LOWER;
+                    case 2, 5 -> BerthType.MIDDLE;
+                    case 3, 6 -> BerthType.UPPER;
+                    case 7    -> BerthType.SIDE_LOWER;
+                    case 8    -> BerthType.SIDE_UPPER;
+                    default   -> BerthType.NONE;
+                };
+            }
+            case "2A" -> {
+                int pos = ((seatNo - 1) % 6) + 1; // 2A has no middle: L,U,L,U,SL,SU
+                yield switch (pos) {
+                    case 1, 3 -> BerthType.LOWER;
+                    case 2, 4 -> BerthType.UPPER;
+                    case 5    -> BerthType.SIDE_LOWER;
+                    case 6    -> BerthType.SIDE_UPPER;
+                    default   -> BerthType.NONE;
+                };
+            }
+            case "1A" -> ((seatNo % 2) == 1) ? BerthType.LOWER : BerthType.UPPER;
+            default   -> BerthType.NONE;
+        };
     }
 }
